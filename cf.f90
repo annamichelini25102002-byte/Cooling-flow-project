@@ -23,10 +23,10 @@ END MODULE DATA
 PROGRAM ZEUS
 USE DATA
 !!IMPLICIT NONE
-real*8 :: xa(N), xb(N), xmax, xmin, deltax, dxa(N), dxb(N)   !! more parameters than I actually use !!
+real*8 :: xa(N), xb(N), xmax, xmin, deltax, dxa(N), dxb(N)    !! more parameters than I actually use !!
 real*8 :: d(N),e(N),v(N),P(N),s(N),tem(N),q(N),bri(N),ds,ent(N),tdyn(N)
 real*8 :: g2a(N), g2b(N), g31a(N), g31b(N), dvl1a(N), dvl1b(N) 
-real*8 :: F1(N),F2(N),F3(N),M(N),dstar(N),e_dstar(N),vstar(N),e_d(N)
+real*8 :: F1(N),Flux_e(N),Flux_s(N),M(N),dstar(N),e_dstar(N),vstar(N),e_d(N)
 real*8 :: divV(N),rshock(50),rsedov,rbubble,mcoldadd,mhotadd
 real*8 :: Ecin,Eter,EterIN, mdot, mcold(N),mhot(N),mcoldold, mvir,&
           delta_time,timeold,mcoldtot,gasfrac,lx,lx500,nbv(N),dlogk
@@ -36,7 +36,7 @@ real*8 :: mstars,mnfw,mbh,mgal(N),mdark(N),ggal(N),gdark(N),gbh(N),conc, &
           factor,tcool(N),mgasin(N),mgas(N),vol(N),barfrac(N),deltat2 
 real*8 :: dfe(N),zfe(N),dfestar(N),Ffe(N),tbv(N),twind,lwind,vwind, &
           mdotwind,temwind,rhost(N),zfest(N),zfesn,zfesol,alphast,alphasn,&
-          alphatot,tst(N),tsn,t00,e00
+          alphatot,tst(N),tsn,t00,e00, ledd, M_dot(N)
 integer :: sdr,Num,ncicli,isn,iagn,ncont,nsn,ivir,ncont2
 character*7 nomefile,brifile,abundfile
 
@@ -299,7 +299,7 @@ print*,'f_bar(rvir) = ',real(barfrac(ivir)) !! this is the baryon fraction at vi
        epsilonx=0.
        if(tem(nn).ge.1.e6)epsilonx=Cool(tem(nn),d(nn)) 
        !tem(nn)= temperatura della cella nn
-       !episilonx=emissività volumentrica calcolata solo se T>10^6K-->it represents the cooling function
+       !episilonx=emissività volumentrica-->variazione di luminosità in termini di volume, calcolata solo se T>10^6K-->it represents the cooling function
        if(nn.eq.i)then
           ds=sqrt(xa(nn+1)**2-xb(i)**2) !spessore della shell, xa(nn) e xb(nn)= coord radiali(limiti delle celle)
        else
@@ -310,7 +310,8 @@ print*,'f_bar(rvir) = ',real(barfrac(ivir)) !! this is the baryon fraction at vi
     enddo
     bri(i)=max(1.d-25,2.*bri(i))   !! "2.*" in order to count the other side
     write(20,1008)xb(i)/cmkpc,bri(i),ent(i),&
-                  tdyn(i)/yr,tcool(i)/yr !tempo/yr= normalizzazione del tempo
+                  tdyn(i)/yr,tcool(i)/yr !rr, brightness, entropy, tdyn, tcool
+                  !tempo/yr= normalizzazione del tempo
  enddo
  close(20)
 
@@ -387,15 +388,15 @@ do while (t<tmax)
    alphasn=4.436e-20*(snu/aml)*(tgyr/tnow)**(-slope)
 !!   alphasn=0.         !! if you don't want SNIa
 
-   alphatot=alphasn+alphast
+   alphatot=alphasn+alphast !tasso totale di perdita di massa
 
  do i=2,N-1
-    d(i)=d(i)+dtmin*alphatot*rhost(i)  !! add stellar mass loss
+    d(i)=d(i)+dtmin*alphatot*rhost(i)  !! add stellar mass loss !d density of gas
     dfe(i)=dfe(i)+dtmin*rhost(i)*(alphast*zfest(i)/1.4+alphasn*zfesn) !! add Fe density!!
-    t00=(alphast*tst(i)+alphasn*tsn)/(alphatot+1.d-30)
-    e00=cv*t00
+    t00=(alphast*tst(i)+alphasn*tsn)/(alphatot+1.d-30) !temperatura media del gas iniettato da parte di SNe e staalar wind in ICM
+    e00=cv*t00 
 !!         if(i.eq.5)print*,'e00 = ',real(e00),real(t00/1.e7)
-    e(i)=e(i)+dtmin*alphatot*rhost(i)*(e00+0.5*v(i)**2)
+    e(i)=e(i)+dtmin*alphatot*rhost(i)*(e00+0.5*v(i)**2) !energ interna
  enddo
 
 !!print*,'alp ',real(alphast), real(alphasn)
@@ -413,9 +414,9 @@ do while (t<tmax)
 	CALL BCa(v) !set the boundary conditions
 
 
-!! CALCULATE ARTIFICIAL VISCOSITY Q pag 23a zeus
+!! CALCULATE ARTIFICIAL VISCOSITY Q pag 23a zeus 
 	do i=2, N-1
-		if ((v(i+1)-v(i))<0.) then
+		if ((v(i+1)-v(i))<0.) then !do not consider to verify the equilibrium
 			q(i)=C2*d(i)*(v(i+1)-v(i))**2
 		else 
 			q(i)=0.
@@ -496,9 +497,9 @@ do while (t<tmax)
      !! CALCULATE MASS AND IRON MASS FLUXES
         do i=2, N-1
 		if (v(i)>0.) then
-			dstar(i)=d(i-1)     !! at i !!
-			dfestar(i)=dfe(i-1)  !! at i !!
-			!dfestar=stellar iron density 
+			dstar(i)=d(i-1)     !dtallar winds density ! at i !!
+			dfestar(i)=dfe(i-1)  !!dfestar=stellar iron density  ! at i !!
+			
 
 		else
 			dstar(i)=d(i)
@@ -511,22 +512,22 @@ do while (t<tmax)
 	dfestar(1)=dfestar(3)
 
 	do i=2, N
-		!density flux p25b zeus
-		F1(i)=dstar(i)*v(i)*g2a(i)*g31a(i)    !! at i !!	
-		Ffe(i)=dfestar(i)*v(i)*g2a(i)*g31a(i)    !! at i !!	
+		
+		F1(i)=dstar(i)*v(i)*g2a(i)*g31a(i)  !gas density flux  due to stellar winds p25b zeus  !! at i !!	
+		Ffe(i)=dfestar(i)*v(i)*g2a(i)*g31a(i)    !!desity ironflux  ! at i !!	
 	end do
 
     !! CALCULATE ENERGY FLUX
 
 	do i=2, N-1
-		M(i)=dstar(i)*v(i)   !! mass flux for consistent advection !!
+		M_dot(i)=dstar(i)*v(i)   !! gas mass flux for consistent advection !!
 	end do
 	CALL BCa(M)
 	
 	
 	do i=2, N-1
 		if (v(i)>0.) then
-			e_dstar(i)=e(i-1)/d(i-1)   !! at i !!
+			e_dstar(i)=e(i-1)/d(i-1)   !energy=energy/density ! at i !!
 		else
 			e_dstar(i)=e(i)/d(i)
 		end if
@@ -537,25 +538,25 @@ do while (t<tmax)
 
      !! NOW FINALLY UPDATE DENSITY, IRON DENSITY AND ENERGY
 	do i=2, N-1
-		d(i)=d(i)-dtmin*(F1(i+1)-F1(i))/dvl1a(i)
-		dfe(i)=dfe(i)-dtmin*(Ffe(i+1)-Ffe(i))/dvl1a(i)
+		d(i)=d(i)-dtmin*(F1(i+1)-F1(i))/dvl1a(i) !densita calcolata dopo avere ricavato flusso di densità formula pag 25b zeus
+		dfe(i)=dfe(i)-dtmin*(Ffe(i+1)-Ffe(i))/dvl1a(i) !new iron density
 	end do 
 	CALL BCb(d)
 	CALL BCb(dfe)
-        zfe=1.4*dfe/d       !! in absolute units
+        zfe=1.4*dfe/d       !new iron abundance ! in absolute units
 
 	do i=2, N
-		F2(i)=e_dstar(i)*M(i)*g2a(i)*g31a(i)				
+		Flux_e(i)=e_dstar(i)*M_dot(i)*g2a(i)*g31a(i)	!energy gas flux			
 	end do
-	CALL BCa(F2)
+	CALL BCa(Flux_e)
 
 	do i=2, N-1
-		e(i)=e(i)-dtmin*(F2(i+1)-F2(i))/dvl1a(i)
+		e(i)=e(i)-dtmin*(Flux_e(i+1)-Flux_e(i))/dvl1a(i) !new energy of the gas 
 	end do
 
 	CALL BCb(e)
         do i=1,N
-           tem(i)=e(i)/(cv*d(i))
+           tem(i)=e(i)/(cv*d(i)) !new temperature of the gas
         enddo
 
 
@@ -563,7 +564,7 @@ do while (t<tmax)
 
 	do i=2, N-1
 		if ((v(i-1)+v(i))*0.5>0) then
-			vstar(i)=v(i-1)       !! at i-1/2
+			vstar(i)=v(i-1)       !steallar winds velocity ! at i-1/2
 		else
 			vstar(i)=v(i)
 		end if
@@ -572,17 +573,17 @@ do while (t<tmax)
 	CALL BCb (vstar)
 
 	do i=1, N-1
-	F3(i)=vstar(i+1)*0.5*(M(i)+M(i+1))*g2b(i)*g31b(i)   !! at i+1/2
+	Flux_s(i)=vstar(i+1)*0.5*(M_dot(i)+M_dot(i+1))*g2b(i)*g31b(i)   !momentum flux ! at i+1/2
 	end do
 	
 	do i=2, N-1
-		s(i)=s(i)-dtmin/dvl1b(i)*(F3(i)-F3(i-1))
+		s(i)=s(i)-dtmin/dvl1b(i)*(Flux_s(i)-Flux_s(i-1)) !new momentum
 	end do
 
 	CALL BCa(s)
 
 	do i=2, N-1
-		v(i)=2.*s(i)/(d(i)+d(i-1))
+		v(i)=2.*s(i)/(d(i)+d(i-1)) !gas velocity 
 	end do
 
 	CALL BCa(v)
@@ -593,13 +594,13 @@ do while (t<tmax)
  if(t.ge.(ncont+1)*deltat)then  !! write results every time interval deltat
     ncont=ncont+1
     call incnam(nomefile)   !! update name of the result datafile "clu00**"
-    open(20,file=nomefile)   
+    open(20,file=nomefile)   !r,rr,densità,velocità,temperatura, pressione, tcool
 
     call incnam(brifile)    !! update name of the brightness datafile "bri00**"
-    open(42,file=brifile)
+    open(42,file=brifile) !
 
     call incnam(abundfile)  !! update name of the abund datafile "abu00**
-    open(21,file=abundfile)
+    open(21,file=abundfile) !new iron abundance
 
     do i=3,N     !! starts from 3 !!
        write(20,1000)xa(i)/cmkpc,xb(i)/cmkpc,d(i)/1.937d-24,v(i)/1.e5, &
@@ -634,7 +635,7 @@ do while (t<tmax)
     enddo
     bri(i)=max(1.d-25,2.*bri(i))   !! factor of 2 to count for the other side
     write(42,1008)xb(i)/cmkpc,bri(i),ent(i),&
-                  tdyn(i)/yr,tcool(i)/yr
+                  tdyn(i)/yr,tcool(i)/yr !rr, brightness, entropy, tdyn, tcool
  enddo
 1008 format(5(1pe12.4))
  close(42)
@@ -658,7 +659,7 @@ do while (t<tmax)
  end do
 
 
-!! Calculate the masses of hot gass, cold gas...
+!! Calculate the masses of hot gass, cold gas, extra cold mass
 
     delta_time=t-timeold !! these two command lines are used to calculate the cooling rate
     mcoldold=mcold(ivir)
@@ -667,7 +668,7 @@ do while (t<tmax)
     mcold(1)=0.
     mhot(1)=0.
     do i=2,N-1
-       mcoldadd=0.
+       mcoldadd=0. !extra cold mass 
        mhotadd=0.
        if(tem(i).le.tcold) mcoldadd=d(i)*vol(i)
        mcold(i)=mcold(i-1)+mcoldadd
@@ -676,7 +677,7 @@ do while (t<tmax)
     enddo
 
     write(22,1100)t/(1.e9*yr),mhot(ivir)/msun,mcold(ivir)/msun,&
-          lx/1.d45,lx500/1.d45
+          lx/1.d45,lx500/1.d45 !stampati in mass_time.dat
 
 1100 format(5(1pe12.4))
 

@@ -39,12 +39,11 @@ real*8 :: dfe(N),zfe(N),dfestar(N),Ffe(N),tbv(N),twind,lwind,vwind, &
           alphatot,tst(N),tsn,t00,e00
 integer :: sdr,Num,ncicli,isn,iagn,ncont,nsn,ivir,ncont2
 character*7 nomefile,brifile,abundfile
-
 real*8, EXTERNAL :: Cool       !! radiative cooling subroutine (see below) !!
-real*8 :: d0min, d0max
+real*8 :: d0min, d0max, d0test
 
-d0min=1e-29
-d0max=1e-18
+d0min=1e-27
+d0max=1e-20
 
 
 !GENERATE THE TWO GRIDS xa AND xb
@@ -245,8 +244,6 @@ tem(1)=tem(2)
 
 
 
-
-
 !rhotest
  
 ! Ciclo di bisezione
@@ -421,8 +418,12 @@ do while (t<tmax)
 	do i=2, N-1
 		 dtmin=min(dtmin,(xb(i)-xb(i-1))/(abs(v(i))+sqrt(gam*p(i)/d(i))))
 	end do
+	
         cfl=min(0.5,1.1*cfl)   !! here increase cfl, up to 0.5
-        dtmin=cfl*dtmin
+        !print*, cfl, dtmin
+        !here 0.5 was added to have smaller dtmin
+        dtmin=0.5*cfl*dtmin 
+      !  print*, dtmin
         t=t+dtmin
 !!        print*,'ncicli, dtmin = ',ncicli, real(dtmin),real(t)
 
@@ -448,7 +449,7 @@ do while (t<tmax)
 !!         if(i.eq.5)print*,'e00 = ',real(e00),real(t00/1.e7)
     e(i)=e(i)+dtmin*alphatot*rhost(i)*(e00+0.5*v(i)**2)
  enddo
-
+!print*, d(1), d(ivir)
 !!print*,'alp ',real(alphast), real(alphasn)
 
  CALL BCb(d)
@@ -850,7 +851,6 @@ END FUNCTION Cool
 !!!      print*,'prima: ',name
       if(name(7:7) .eq. '9') go to 20
 !!!        print*,'prima name7: ',name(7:7)
-      name(7:7) = char(1 + ichar(name(7:7)))
 !!!        print*,'dopo name7: ',name(7:7)
       return
 
@@ -866,4 +866,3 @@ END FUNCTION Cool
 
       return
       end
-
